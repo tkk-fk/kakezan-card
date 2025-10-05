@@ -379,10 +379,13 @@
   }
 
   // ★ 全画面タッチ（再生中のみ反応）
-  card.addEventListener('click', () => {
-    if (!running) return;
-    if (!showingAnswer) showAnswer(); else nextProblem();
-  });
+// ★ 全画面タッチ（再生中のみ反応）— ボタン発のクリックは無視
+card.addEventListener('click', (e) => {
+  if (!running) return;
+  if (e.target.closest('button')) return;   // ← 追加：スタート/もういっかい等のクリックは無視
+  if (!showingAnswer) showAnswer(); else nextProblem();
+});
+
 
   // 操作
   startBtn.addEventListener('click', () => { if (selectedDans.length) startGame(); });
