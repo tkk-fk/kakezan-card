@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>わくわく！かけざんカード</title>
+<style>
+  :root {
+    --bg: #fdf2e2;
+    --card: #ffffff;
+    --ink: #5c3c20;
+    --accent: #cc4e00;
+    --accent-hover: #9a3412;
+    --green: #15803d;
+    --ring: #f3e5d8;
+    --radius: 24px;
+    --shadow: 0 8px 32px rgba(0,0,0,.1);
+    /* 位置微調整：必要なら値を変えてください */
+    --eq-shift: clamp(12px, 6vh, 140px);
+  }
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  }
+
+  /* 画面いっぱい（dvh対応） */
+  .card{
+    width:100%;
+    height:100vh;         /* fallback */
+    height:100dvh;        /* 実表示高さ */
+    display:grid; grid-template-rows: auto 1fr auto;
+    background: var(--card);
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 再生中は全画面タッチ可能 ＆ポインタ表示 */
+  .card.playing{ cursor: pointer; }
+  .card.playing *{ user-select:none; }
+
+  /* --- 設定（ヘッダー） --- */
+  .header{
+    padding: clamp(16px, 3vw, 36px);
+    text-align: center;
+    /* 線を無しに */
+    border-bottom: none;
+  }
+  .header h1{
+    margin: 0 0 clamp(10px, 2vw, 16px);
+    font-size: clamp(28px, 4vw, 48px);
+    color: var(--accent);
+  }
+  .group{ margin: clamp(10px, 1.6vw, 16px) 0 clamp(14px, 2vw, 24px); }
+  .group h2{
+    margin: 0 0 clamp(8px, 1.2vw, 12px);
+    font-size: clamp(14px, 1.8vw, 22px);
+    color:#8b5e3c; font-weight:700;
+  }
+
+  .dan-selector{
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap: clamp(8px, 1.2vw, 16px);
+    margin-bottom: clamp(6px, 1vw, 12px);
+    padding: 0 clamp(4px, 1vw, 12px);
+  }
+  .dan-actions{
+    display:flex; gap: clamp(8px, 1.2vw, 16px);
+    justify-content:center; margin-top: clamp(6px, 1vw, 12px);
+  }
+  .pill-row{
+    display:flex; flex-wrap:wrap; gap: clamp(8px, 1.2vw, 16px); justify-content:center;
+    padding: 0 clamp(4px, 1vw, 12px);
+  }
+
+  .dan-btn,.pill,.mini-pill{
+    border:2px solid var(--ring); border-radius:16px;
+    background:#fff; color:var(--ink); cursor:pointer; transition:all .2s ease;
+  }
+  .dan-btn{
+    padding: clamp(12px, 2.2vw, 22px) 0;
+    font-size: clamp(28px, 4.8vw, 64px); font-weight: 800;
+  }
+  .pill{
+    padding: clamp(10px, 1.8vw, 18px) clamp(14px, 2.4vw, 28px);
+    font-size: clamp(18px, 2.6vw, 32px); font-weight: 700;
+  }
+  .mini-pill{
+    padding: clamp(6px, 1.2vw, 10px) clamp(10px, 2vw, 16px);
+    font-size: clamp(14px, 1.8vw, 22px); font-weight: 600;
+  }
+  .dan-btn:hover,.pill:hover,.mini-pill:hover{ background:#fffaf0; transform: translateY(-2px); }
+  .selected{ background:var(--accent); color:#fff; border-color:var(--accent); transform:scale(1.05); }
+
+  .btn{
+    border:none; border-radius:99px;
+    padding: clamp(12px, 2.2vw, 24px) clamp(24px, 4vw, 48px);
+    font-size: clamp(22px, 3.2vw, 40px); font-weight: 800;
+    background: var(--accent); color:#fff; cursor:pointer; transition: background-color .2s ease;
+  }
+  .btn:hover{ background: var(--accent-hover); }
+  .btn:disabled{ opacity:.5; cursor:not-allowed }
+
+  /* --- 問題（中央ステージ） --- */
+  .stage{
+    position:relative;
+    display:grid; place-items:center;
+    padding: clamp(16px, 3vw, 36px);
+  }
+  .eq{
+    display:flex; align-items:center; justify-content:center;
+    gap: clamp(16px, 4vw, 48px);
+    font-weight: 900; line-height: 1.1;
+    transform: translateY(var(--eq-shift)); /* 少し下へ */
+  }
+  .piece{ font-size: clamp(80px, 16vw, 260px); }
+  .ans{
+    font-size: clamp(80px, 16vw, 260px);
+    color: var(--green);
+    visibility:hidden; transform: scale(0.5); opacity:0;
+    transition: all .3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .ans.show{ visibility:visible; transform: scale(1); opacity:1; }
+
+  /* --- フッター（進捗） --- */
+  .footer{
+    display:flex; justify-content:center; align-items:center;
+    padding: clamp(12px, 2.4vw, 28px);
+    /* 線を無しに */
+    border-top: none;
+  }
+  .progress{
+    display:flex; flex-wrap: wrap; justify-content: center; align-items:center;
+    gap: clamp(6px, 1.4vw, 18px);
+    max-width: min(1400px, 92vw);
+  }
+  .progress span{
+    font-size: clamp(22px, 3.2vw, 42px);
+    transition: transform .2s ease;
+  }
+  .progress span.on{ transform: scale(1.25); }
+
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+  <main class="card" role="application">
+    <!-- ヘッダー -->
+    <section class="header" id="header">
+      <h1>どのれんしゅうをする？</h1>
+
+      <div class="group">
+        <h2>だん をえらぶ（なんこでもOK）</h2>
+        <div class="dan-selector" id="dan-selector"></div>
+        <div class="dan-actions">
+          <button class="mini-pill" id="select-all">ぜんぶ</button>
+          <button class="mini-pill" id="clear-all">クリア</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>しゅつだいじゅん</h2>
+        <div class="pill-row" id="mode-row">
+          <button class="pill selected" data-mode="rand">ランダム</button>
+          <button class="pill" data-mode="seq">順番</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>もんだいすう</h2>
+        <div class="pill-row" id="count-row">
+          <button class="pill" data-count="9">9</button>
+          <button class="pill selected" data-count="18">18</button>
+          <button class="pill" data-count="27">27</button>
+          <button class="pill" data-count="36">36</button>
+          <button class="pill" data-count="45">45</button>
+          <button class="pill" data-count="54">54</button>
+          <button class="pill" data-count="63">63</button>
+          <button class="pill" data-count="72">72</button>
+          <button class="pill" data-count="81">81</button>
+        </div>
+      </div>
+
+      <button class="btn" id="start" disabled>すたーと！</button>
+    </section>
+
+    <!-- ステージ -->
+    <section class="stage hidden" id="stage" aria-live="polite">
+      <div class="eq" id="eq">
+        <span class="piece" id="L"></span>
+        <span class="piece" id="X">×</span>
+        <span class="piece" id="R"></span>
+        <span class="piece" id="E">=</span>
+        <span class="ans"   id="A"></span>
+      </div>
+    </section>
+
+    <!-- フッター（進捗） -->
+    <section class="footer hidden" id="footer">
+      <div class="progress" id="progress"></div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // 画面
+  const card   = document.querySelector('.card');
+  const header = $('header');
+  const stage  = $('stage');
+  const footer = $('footer');
+
+  // 設定UI
+  const danSelector = $('dan-selector');
+  const selectAllBtn = $('select-all');
+  const clearAllBtn  = $('clear-all');
+  const modeRow = $('mode-row');
+  const countRow = $('count-row');
+  const startBtn = $('start');
+
+  // 式
+  let L = $('L'), X = $('X'), R = $('R'), E = $('E'), A = $('A');
+  const progress = $('progress');
+
+  // 状態
+  let problems = [];
+  let idx = 0;
+  let showingAnswer = false;
+  let running = false;
+  let selectedDans = [];
+  let selectedMode = 'rand';   // 'rand' | 'seq'
+  let selectedCount = 18;      // 9..81 (9刻み)
+
+  // 段ボタン（1〜9）
+  for (let i = 1; i <= 9; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'dan-btn';
+    btn.textContent = i;
+    btn.dataset.dan = i;
+    danSelector.appendChild(btn);
+  }
+
+  function refreshSelectedDans(){
+    selectedDans = Array.from(danSelector.querySelectorAll('.dan-btn.selected'))
+      .map(b => parseInt(b.dataset.dan, 10))
+      .sort((a,b)=>a-b);
+    startBtn.disabled = selectedDans.length === 0;
+  }
+
+  // 段トグル
+  danSelector.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dan-btn');
+    if (!btn) return;
+    btn.classList.toggle('selected');
+    refreshSelectedDans();
+  });
+
+  // ぜんぶ / クリア
+  selectAllBtn.addEventListener('click', () => {
+    danSelector.querySelectorAll('.dan-btn').forEach(b => b.classList.add('selected'));
+    refreshSelectedDans();
+  });
+  clearAllBtn.addEventListener('click', () => {
+    danSelector.querySelectorAll('.dan-btn').forEach(b => b.classList.remove('selected'));
+    refreshSelectedDans();
+  });
+
+  // 出題順
+  modeRow.addEventListener('click', (e) => {
+    const b = e.target.closest('.pill'); if (!b) return;
+    modeRow.querySelectorAll('.pill').forEach(p=>p.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedMode = b.dataset.mode; // 'rand' | 'seq'
+  });
+
+  // 問題数
+  countRow.addEventListener('click', (e) => {
+    const b = e.target.closest('.pill'); if (!b) return;
+    countRow.querySelectorAll('.pill').forEach(p=>p.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedCount = parseInt(b.dataset.count, 10);
+  });
+
+  // 問題生成
+  function createProblems(dans, count, mode) {
+    const list = [];
+    if (mode === 'seq') {
+      for (let i = 0; i < count; i++) {
+        const d = dans[i % dans.length];
+        const r = (Math.floor(i / dans.length) % 9) + 1;
+        list.push([d, r]);
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        const d = dans[Math.floor(Math.random()*dans.length)];
+        const r = Math.floor(Math.random()*9) + 1;
+        list.push([d, r]);
+      }
+    }
+    return list;
+  }
+
+  // 進捗
+  function renderProgress() {
+    progress.innerHTML = '';
+    for (let i = 0; i < problems.length; i++) {
+      const star = document.createElement('span');
+      star.textContent = '⭐';
+      if (i < idx || (i === idx && showingAnswer)) star.classList.add('on');
+      progress.appendChild(star);
+    }
+  }
+
+  // 表示
+  function showProblem() {
+    const [l, r] = problems[idx];
+    L.textContent = String(l);
+    R.textContent = String(r);
+    A.textContent = String(l * r);
+    A.classList.remove('show');
+    showingAnswer = false;
+    renderProgress();
+  }
+  function showAnswer() {
+    A.classList.add('show');
+    showingAnswer = true;
+    renderProgress();
+  }
+  function nextProblem() {
+    if (idx < problems.length - 1) { idx++; showProblem(); }
+    else { finishGame(); }
+  }
+
+  // 開始・終了
+  function startGame() {
+    problems = createProblems(selectedDans, selectedCount, selectedMode);
+    idx = 0; running = true;
+
+    header.classList.add('hidden');
+    stage.classList.remove('hidden');
+    footer.classList.remove('hidden');
+    card.classList.add('playing');   // 全画面タッチON
+
+    showProblem();
+  }
+
+  function finishGame() {
+    running = false;
+    card.classList.remove('playing'); // 全画面タッチOFF（ボタン操作を優先）
+    stage.innerHTML = `
+      <div class="done" role="status" style="text-align:center;">
+        <div class="done-icon" style="font-size: clamp(48px, 8vw, 100px); margin-bottom: 12px;">🏅</div>
+        <h2 style="font-size: clamp(28px, 4vw, 56px); color: var(--accent); margin: 0 0 8px;">よくできました！</h2>
+        <p style="font-size: clamp(18px, 2.4vw, 28px); margin: 0 0 16px;">
+          ${selectedDans.join('・')} のだんを ${problems.length}もん がんばったね！
+        </p>
+        <div class="row" style="display:flex; gap: clamp(10px, 2vw, 18px); justify-content:center;">
+          <button class="btn ghost" id="again" style="background:#f0e6da; color:var(--ink);">
+            もういっかい
+          </button>
+          <button class="btn" id="reset">さいしょから</button>
+        </div>
+      </div>
+    `;
+    footer.classList.add('hidden');
+
+    $('again').onclick = () => {
+      stage.innerHTML = `
+        <div class="eq" id="eq">
+          <span class="piece" id="L"></span><span class="piece" id="X">×</span>
+          <span class="piece" id="R"></span><span class="piece" id="E">=</span>
+          <span class="ans" id="A"></span>
+        </div>
+      `;
+      L = $('L'); X = $('X'); R = $('R'); E = $('E'); A = $('A');
+      startGame();
+    };
+    $('reset').onclick = () => location.reload();
+  }
+
+  // ★ 全画面タッチ（再生中のみ反応）
+  card.addEventListener('click', () => {
+    if (!running) return;
+    if (!showingAnswer) showAnswer(); else nextProblem();
+  });
+
+  // 操作
+  startBtn.addEventListener('click', () => { if (selectedDans.length) startGame(); });
+})();
+</script>
+</body>
+</html>
