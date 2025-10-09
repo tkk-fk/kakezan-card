@@ -15,7 +15,6 @@
     --ring: #f3e5d8;
     --radius: 24px;
     --shadow: 0 8px 32px rgba(0,0,0,.1);
-    /* 位置微調整：必要なら値を変えてください */
     --eq-shift: clamp(12px, 6vh, 140px);
   }
   *{ box-sizing:border-box }
@@ -34,7 +33,6 @@
     background: var(--card);
     -webkit-tap-highlight-color: transparent;
   }
-  /* 再生中は全画面タッチ可能 ＆ポインタ表示 */
   .card.playing{ cursor: pointer; }
   .card.playing *{ user-select:none; }
 
@@ -42,7 +40,6 @@
   .header{
     padding: clamp(16px, 3vw, 36px);
     text-align: center;
-    /* 線を無しに */
     border-bottom: none;
   }
   .header h1{
@@ -110,7 +107,7 @@
     display:flex; align-items:center; justify-content:center;
     gap: clamp(16px, 4vw, 48px);
     font-weight: 900; line-height: 1.1;
-    transform: translateY(var(--eq-shift)); /* 少し下へ */
+    transform: translateY(var(--eq-shift));
   }
   .piece{ font-size: clamp(80px, 16vw, 260px); }
   .ans{
@@ -125,7 +122,6 @@
   .footer{
     display:flex; justify-content:center; align-items:center;
     padding: clamp(12px, 2.4vw, 28px);
-    /* 線を無しに */
     border-top: none;
   }
   .progress{
@@ -211,12 +207,12 @@
   const footer = $('footer');
 
   // 設定UI
-  const danSelector = $('dan-selector');
+  const danSelector  = $('dan-selector');
   const selectAllBtn = $('select-all');
   const clearAllBtn  = $('clear-all');
-  const modeRow = $('mode-row');
-  const countRow = $('count-row');
-  const startBtn = $('start');
+  const modeRow      = $('mode-row');
+  const countRow     = $('count-row');
+  const startBtn     = $('start');
 
   // 式
   let L = $('L'), X = $('X'), R = $('R'), E = $('E'), A = $('A');
@@ -281,16 +277,21 @@
     selectedCount = parseInt(b.dataset.count, 10);
   });
 
-  // 問題生成
+  // ✅ 問題生成（順番修正版）
   function createProblems(dans, count, mode) {
     const list = [];
     if (mode === 'seq') {
-      for (let i = 0; i < count; i++) {
-        const d = dans[i % dans.length];
-        const r = (Math.floor(i / dans.length) % 9) + 1;
-        list.push([d, r]);
+      // 1だん→2だん→…（各だんで 1×〜9× と進む）
+      const onePass = [];
+      for (const d of [...dans].sort((a,b)=>a-b)) {
+        for (let r = 1; r <= 9; r++) {
+          onePass.push([d, r]);
+        }
       }
+      while (list.length < count) list.push(...onePass);
+      list.length = count;
     } else {
+      // ランダム
       for (let i = 0; i < count; i++) {
         const d = dans[Math.floor(Math.random()*dans.length)];
         const r = Math.floor(Math.random()*9) + 1;
@@ -339,14 +340,14 @@
     header.classList.add('hidden');
     stage.classList.remove('hidden');
     footer.classList.remove('hidden');
-    card.classList.add('playing');   // 全画面タッチON
+    card.classList.add('playing');
 
     showProblem();
   }
 
   function finishGame() {
     running = false;
-    card.classList.remove('playing'); // 全画面タッチOFF（ボタン操作を優先）
+    card.classList.remove('playing');
     stage.innerHTML = `
       <div class="done" role="status" style="text-align:center;">
         <div class="done-icon" style="font-size: clamp(48px, 8vw, 100px); margin-bottom: 12px;">🏅</div>
@@ -378,14 +379,12 @@
     $('reset').onclick = () => location.reload();
   }
 
-  // ★ 全画面タッチ（再生中のみ反応）
-// ★ 全画面タッチ（再生中のみ反応）— ボタン発のクリックは無視
-card.addEventListener('click', (e) => {
-  if (!running) return;
-  if (e.target.closest('button')) return;   // ← 追加：スタート/もういっかい等のクリックは無視
-  if (!showingAnswer) showAnswer(); else nextProblem();
-});
-
+  // 全画面タッチ（再生中のみ反応）— ボタン発のクリックは無視
+  card.addEventListener('click', (e) => {
+    if (!running) return;
+    if (e.target.closest('button')) return;
+    if (!showingAnswer) showAnswer(); else nextProblem();
+  });
 
   // 操作
   startBtn.addEventListener('click', () => { if (selectedDans.length) startGame(); });
