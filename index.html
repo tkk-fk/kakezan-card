@@ -15,13 +15,13 @@
     --ring: #f3e5d8;
     --radius: 24px;
     --shadow: 0 8px 32px rgba(0,0,0,.1);
-    --eq-shift: clamp(12px, 6vh, 140px);
   }
   *{ box-sizing:border-box }
   html,body{ height:100% }
   body{
     margin:0; background:var(--bg); color:var(--ink);
     font-family:"Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* 画面いっぱい（dvh対応） */
@@ -29,18 +29,20 @@
     width:100%;
     height:100vh;         /* fallback */
     height:100dvh;        /* 実表示高さ */
-    display:grid; grid-template-rows: auto 1fr auto;
+    display:grid; grid-template-rows: auto 1fr; /* 初期はヘッダー+ステージ */
     background: var(--card);
-    -webkit-tap-highlight-color: transparent;
+    position: relative; /* ★ 追加：ステージを絶対配置の基準にする */
   }
-  .card.playing{ cursor: pointer; }
+  .card.playing{ 
+    cursor: pointer; 
+    grid-template-rows: 0 1fr; /* ★ 追加：プレイ中はヘッダー行を0に */
+  }
   .card.playing *{ user-select:none; }
 
   /* --- 設定（ヘッダー） --- */
   .header{
     padding: clamp(16px, 3vw, 36px);
     text-align: center;
-    border-bottom: none;
   }
   .header h1{
     margin: 0 0 clamp(10px, 2vw, 16px);
@@ -97,17 +99,18 @@
   .btn:hover{ background: var(--accent-hover); }
   .btn:disabled{ opacity:.5; cursor:not-allowed }
 
-  /* --- 問題（中央ステージ） --- */
+  /* --- 問題（中央ステージ：全面オーバーレイ＆中央揃え） --- */
   .stage{
-    position:relative;
-    display:grid; place-items:center;
+    position: absolute;    /* ★ 変更 */
+    inset: 0;              /* ★ 変更：上下左右0で全面 */
+    display: grid;         /* ★ 変更 */
+    place-items: center;   /* ★ 変更：縦横中央 */
     padding: clamp(16px, 3vw, 36px);
   }
   .eq{
     display:flex; align-items:center; justify-content:center;
     gap: clamp(16px, 4vw, 48px);
     font-weight: 900; line-height: 1.1;
-    transform: translateY(var(--eq-shift));
   }
   .piece{ font-size: clamp(80px, 16vw, 260px); }
   .ans{
@@ -117,23 +120,6 @@
     transition: all .3s cubic-bezier(0.34,1.56,0.64,1);
   }
   .ans.show{ visibility:visible; transform: scale(1); opacity:1; }
-
-  /* --- フッター（進捗） --- */
-  .footer{
-    display:flex; justify-content:center; align-items:center;
-    padding: clamp(12px, 2.4vw, 28px);
-    border-top: none;
-  }
-  .progress{
-    display:flex; flex-wrap: wrap; justify-content: center; align-items:center;
-    gap: clamp(6px, 1.4vw, 18px);
-    max-width: min(1400px, 92vw);
-  }
-  .progress span{
-    font-size: clamp(22px, 3.2vw, 42px);
-    transition: transform .2s ease;
-  }
-  .progress span.on{ transform: scale(1.25); }
 
   .hidden{ display:none; }
 </style>
@@ -179,7 +165,7 @@
       <button class="btn" id="start" disabled>スタート</button>
     </section>
 
-    <!-- ステージ -->
+    <!-- ステージ（中央フラッシュカード） -->
     <section class="stage hidden" id="stage" aria-live="polite">
       <div class="eq" id="eq">
         <span class="piece" id="L"></span>
@@ -188,11 +174,6 @@
         <span class="piece" id="E">=</span>
         <span class="ans"   id="A"></span>
       </div>
-    </section>
-
-    <!-- フッター（進捗） -->
-    <section class="footer hidden" id="footer">
-      <div class="progress" id="progress"></div>
     </section>
   </main>
 
@@ -204,7 +185,6 @@
   const card   = document.querySelector('.card');
   const header = $('header');
   const stage  = $('stage');
-  const footer = $('footer');
 
   // 設定UI
   const danSelector  = $('dan-selector');
@@ -216,7 +196,6 @@
 
   // 式
   let L = $('L'), X = $('X'), R = $('R'), E = $('E'), A = $('A');
-  const progress = $('progress');
 
   // 状態
   let problems = [];
@@ -277,21 +256,17 @@
     selectedCount = parseInt(b.dataset.count, 10);
   });
 
-  // ✅ 問題生成（順番修正版）
+  // 問題生成
   function createProblems(dans, count, mode) {
     const list = [];
     if (mode === 'seq') {
-      // 1だん→2だん→…（各だんで 1×〜9× と進む）
       const onePass = [];
       for (const d of [...dans].sort((a,b)=>a-b)) {
-        for (let r = 1; r <= 9; r++) {
-          onePass.push([d, r]);
-        }
+        for (let r = 1; r <= 9; r++) onePass.push([d, r]);
       }
       while (list.length < count) list.push(...onePass);
       list.length = count;
     } else {
-      // ランダム
       for (let i = 0; i < count; i++) {
         const d = dans[Math.floor(Math.random()*dans.length)];
         const r = Math.floor(Math.random()*9) + 1;
@@ -299,17 +274,6 @@
       }
     }
     return list;
-  }
-
-  // 進捗
-  function renderProgress() {
-    progress.innerHTML = '';
-    for (let i = 0; i < problems.length; i++) {
-      const star = document.createElement('span');
-      star.textContent = '⭐';
-      if (i < idx || (i === idx && showingAnswer)) star.classList.add('on');
-      progress.appendChild(star);
-    }
   }
 
   // 表示
@@ -320,12 +284,10 @@
     A.textContent = String(l * r);
     A.classList.remove('show');
     showingAnswer = false;
-    renderProgress();
   }
   function showAnswer() {
     A.classList.add('show');
     showingAnswer = true;
-    renderProgress();
   }
   function nextProblem() {
     if (idx < problems.length - 1) { idx++; showProblem(); }
@@ -339,8 +301,7 @@
 
     header.classList.add('hidden');
     stage.classList.remove('hidden');
-    footer.classList.remove('hidden');
-    card.classList.add('playing');
+    card.classList.add('playing'); // ★ プレイ中レイアウト適用
 
     showProblem();
   }
@@ -363,7 +324,6 @@
         </div>
       </div>
     `;
-    footer.classList.add('hidden');
 
     $('again').onclick = () => {
       stage.innerHTML = `
@@ -379,7 +339,7 @@
     $('reset').onclick = () => location.reload();
   }
 
-  // 全画面タッチ（再生中のみ反応）— ボタン発のクリックは無視
+  // 全画面タップ：1回で答え、もう1回で次へ
   card.addEventListener('click', (e) => {
     if (!running) return;
     if (e.target.closest('button')) return;
